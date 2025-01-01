@@ -5,8 +5,16 @@ import sys;
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox, QListView, QListWidget;
 from PyQt6 import uic, QtGui, QtCore;
 from PyQt6.QtCore import pyqtSignal, Qt, QCoreApplication, QDir, QSettings, QTimer, QDateTime, QFile;
+from PyQt6.QtSql import QSqlDatabase;
 
-#from converterWorker import ConverterWorker;
+from FileModel import FileListModel;
+
+#from ConverterPostgreWorker import ConverterPostgreWorker;
+#from ConverterMsSqlWorker import ConverterMsSqlWorker;
+from ConverterSqlitelWorker import ConverterSqliteWorker;
+from FileModel import FileListModel;
+
+
 
 
 class ControlCenterWindow(QMainWindow):
@@ -16,9 +24,13 @@ class ControlCenterWindow(QMainWindow):
     mCounterMsSql    = 0;
     mCounterPostgre  = 0;
 
-    MsSqlHelper      = None;
-    PostgreSqlHelper = None;
-    SqliteHelper     = None;
+    MsSqlHelper     = None;
+    PostgreHelper   = None;
+    SqLiteHelper    = None;
+    mFileList       = [];
+
+    mFieldsPosition = {};
+
 
 
     def __init__(self, parent=None):
@@ -39,9 +51,25 @@ class ControlCenterWindow(QMainWindow):
         self.btnStopConverter.clicked.connect(self.btnStartConverterClicked);
 
         # ===================================== Обработчики нажатия кнопок ===================================== #
+        #self.DirectoryListView.currentChanged.connect(lambda: self.FileNameCsv.setText("Item Changed Signal"));
+
+        self.mRootPath = QDir.toNativeSeparators(QDir.currentPath());
+        rootDir = QDir(self.mRootPath);
+        self.mBasePath = self.mRootPath + QDir.separator() + "storage";
+        self.mCsvPath  = self.mRootPath + QDir.separator() + "csv";
+        rootDir.mkpath(self.mBasePath);
+        rootDir.mkpath(self.mCsvPath);
+
+        model = FileListModel(self);
+        model.setDirPath(self.mCsvPath);
+        self.DirectoryListView.setModel(model);
+        self.DirectoryListView.selectionModel().selectionChanged.connect(self.onDirectoryListViewItemChange);
+
+
+        # ===================================== Обработчики нажатия кнопок ===================================== #
         self.mConverterWorker = None;
         self.mConverterThread = None;
-
+        self.revisionDrivers();
 
 
     def closeEvent(self, event):
@@ -57,6 +85,36 @@ class ControlCenterWindow(QMainWindow):
             event.accept();
         else:
             event.ignore();
+
+
+    def revisionDrivers(self):
+        db = QSqlDatabase.addDatabase('QSQLITE', "testing_Sqlite_connection"); 
+        self.mDriverSqliteValid = db.isValid();
+        if self.mDriverSqliteValid:
+            print("Driver Sqlite is available.");
+        else:
+            print("Driver Sqlite is not available.");
+        db = None;
+
+        db = QSqlDatabase.addDatabase("QPSQL", "testing_Postgre_connection"); 
+        self.mDriverPostgreValid = db.isValid();
+        if self.mDriverPostgreValid:
+            print("Driver Postgre SQL is available.")
+        else:
+            print("Driver Postgre SQL is not available.")
+        db = None;
+
+        db = QSqlDatabase.addDatabase("QODBC", "testing_MsSql_connection"); 
+        self.mDriverMsSqlValid = db.isValid();
+        if self.mDriverMsSqlValid:
+            print("Driver Microsoft SQL is available.")
+        else:
+            print("Driver Microsoft SQL is not available.")
+        db = None;
+
+
+    def onDirectoryListViewItemChange(self, item):
+        self.CsvFileName.setText(item.indexes()[0].data());
 
 
     def fillDirectoryListView(self):
@@ -161,22 +219,65 @@ class ControlCenterWindow(QMainWindow):
         self.PostgreDatabaseName.setText(settings.value("PostgreDatabaseName", "basestation"));
         settings.endGroup();
 
+        settings.beginGroup("FieldsPosition");
+        self.mFieldsPosition["bs_operator"]       = int(settings.value("bs_operator", -1));
+        self.mFieldsPosition["bs_operator_id"]    = int(settings.value("bs_operator_id", -1));
+        self.mFieldsPosition["bs_work_start"]     = int(settings.value("bs_work_start", -1));
+        self.mFieldsPosition["bs_work_end"]       = int(settings.value("bs_work_end", -1));
+        self.mFieldsPosition["bs_address_nostr"]  = int(settings.value("bs_address_nostr", -1));
+        self.mFieldsPosition["bs_sector_ids"]     = int(settings.value("bs_sector_ids", -1));
+        self.mFieldsPosition["bs_aft_param"]      = int(settings.value("bs_aft_param", -1));
+        self.mFieldsPosition["bs_network_type"]   = int(settings.value("bs_network_type", -1));
+        self.mFieldsPosition["bs_address_str"]    = int(settings.value("bs_address_str", -1));
+        self.mFieldsPosition["bs_geo_lat"]        = int(settings.value("bs_geo_lat", -1));
+        self.mFieldsPosition["bs_geo_lon"]        = int(settings.value("bs_geo_lon", -1));
+        self.mFieldsPosition["bs_geo_type"]       = int(settings.value("bs_geo_type", -1));
+        self.mFieldsPosition["bs_place_type"]     = int(settings.value("bs_place_type", -1));
+        self.mFieldsPosition["bs_id"]             = int(settings.value("bs_id", -1));
+        self.mFieldsPosition["bs_sector_id"]      = int(settings.value("bs_sector_id", -1));
+        self.mFieldsPosition["bs_lac"]            = int(settings.value("bs_lac", -1));
+        self.mFieldsPosition["bs_cell"]           = int(settings.value("bs_cell", -1));
+        self.mFieldsPosition["bs_fone_id_cell"]   = int(settings.value("bs_fone_id_cell", -1));
+        self.mFieldsPosition["bs_azimut"]         = int(settings.value("bs_azimut", -1));
+        self.mFieldsPosition["bs_angle"]          = int(settings.value("bs_angle", -1));
+        self.mFieldsPosition["bs_uklon_angle"]    = int(settings.value("bs_uklon_angle", -1));
+        self.mFieldsPosition["bs_power"]          = int(settings.value("bs_power", -1));
+        self.mFieldsPosition["bs_freq"]           = int(settings.value("bs_freq", -1));
+        self.mFieldsPosition["bs_height"]         = int(settings.value("bs_height", -1));
+        self.mFieldsPosition["bs_power_koef"]     = int(settings.value("bs_power_koef", -1));
+        self.mFieldsPosition["bs_polariz"]        = int(settings.value("bs_polariz", -1));
+        self.mFieldsPosition["bs_position_type"]  = int(settings.value("bs_position_type", -1));
+        self.mFieldsPosition["bs_width_diagram"]  = int(settings.value("bs_width_diagram", -1));
+        self.mFieldsPosition["bs_generation"]     = int(settings.value("bs_generation", -1));
+        self.mFieldsPosition["bs_controller_num"] = int(settings.value("bs_controller_num", -1));
+        self.mFieldsPosition["bs_BCC_NCC"]        = int(settings.value("bs_BCC_NCC", -1));
+        self.mFieldsPosition["bs_type"]           = int(settings.value("bs_type", -1));
+        self.mFieldsPosition["bs_freq_class"]     = int(settings.value("bs_freq_class", -1));
+        self.mFieldsPosition["bs_name"]           = int(settings.value("bs_name", -1));
+        self.mFieldsPosition["bs_channel"]        = int(settings.value("bs_channel", -1));
+        self.mFieldsPosition["bs_freq_down"]      = int(settings.value("bs_freq_down", -1));
+        self.mFieldsPosition["bs_freq_top"]       = int(settings.value("bs_freq_top", -1));
+        self.mFieldsPosition["bs_level_side"]     = int(settings.value("bs_level_side", -1));
+        self.mFieldsPosition["bs_cell_wimax"]     = int(settings.value("bs_cell_wimax", -1));
+        self.mFieldsPosition["bs_mac"]            = int(settings.value("bs_mac", -1));
+        settings.endGroup();
+
+
 
     def btnSaveSettingsAppClicked(self, state):
         self.saveSettings();
 
 
     def StartSqliteConverterClicked(self, state):
-        print("StartSqliteConverter");
+        self.startConverter("sqlite");
 
 
     def StartMsSqlConverterClicked(self, state):
-        print("StartMsSqlConverter");
+        self.startConverter("mssql");
 
 
     def StartPostgreSqlConverterClicked(self, state):
-        print("StartPostgreSqlConverter");
-
+        self.startConverter("postgre");
 
 
     def btnStopConverterClicked(self, state):
@@ -197,17 +298,19 @@ class ControlCenterWindow(QMainWindow):
             self.mConverterThread = None;
 
 
-    def startConverter(self):
+    def startConverter(self, clickName = "sqlite"):
         self.stopConverter();
 
         self.mConverterThread = QtCore.QThread();
-        self.mConverterWorker = ConverterWorker(CsvFileName = self.FileNameCsv.text(), 
+        self.mConverterWorker = ConverterSqliteWorker(CsvFileName = self.FileNameCsv.text(),
+                                                Delimiter = self.Delimiter.text(),
                                                 SqLiteFileName = self.FileNameDbSqLite.text(), 
                                                 MsSqlServer = self.SourceBdServerIp.text(),
                                                 MsSqlUser = self.SourceBdUserName.text(), 
                                                 MsSqlPass = self.SourceBdPassword.text(),
                                                 MsSqlDbName = self.SourceBdDatabaseName.text(),
-                                                Delimiter = self.Delimiter.text());
+
+                                                );
         self.mConverterWorker.moveToThread(self.mConverterThread);
 
         self.mConverterWorker.mErrorSignal.connect(self.ErrorSignal);
